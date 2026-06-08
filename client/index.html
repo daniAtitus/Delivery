@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery — Fazer Pedido</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <span class="emoji">🛵</span>
+    <h1>Delivery — Fazer Pedido</h1>
+  </header>
+
+  <main>
+
+    <div>
+      <div class="card">
+        <h2>Cardápio</h2>
+        <div id="lista-cardapio">
+          <p class="vazio">Carregando cardápio...</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h2>Seu pedido</h2>
+        <div id="resumo-itens">Nenhum item selecionado</div>
+        <div id="total"></div>
+
+        <div class="campo">
+          <label for="endereco">Endereço de entrega</label>
+          <input type="text" id="endereco" placeholder="Ex: Rua das Flores, 123">
+        </div>
+
+        <button class="btn btn-primary" id="btn-pedir" onclick="fazerPedido()">
+          Fazer pedido
+        </button>
+
+        <div id="msg-feedback" class="msg"></div>
+      </div>
+
+      <div class="card" id="area-status">
+        <h2>Acompanhar pedido</h2>
+        <div class="status-box">
+          <div class="status-id" id="status-id"></div>
+          <div class="status-badge" id="status-badge"></div>
+          <div class="progresso">
+            <div class="passo" id="passo-1"></div>
+            <div class="passo" id="passo-2"></div>
+            <div class="passo" id="passo-3"></div>
+            <div class="passo" id="passo-4"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000"
+
+
+    let cardapio = []           
+    let selecionados = new Set()
+    let pollingInterval = null   
+
+
+    async function carregarCardapio() {
+      try {
+        const res = await fetch(`${API}/cardapio`)
+        cardapio = await res.json()
+        renderizarCardapio()
+      } catch (e) {
+        document.getElementById("lista-cardapio").innerHTML =
+          '<p class="vazio">Erro ao carregar cardápio. API está rodando?</p>'
+      }
+    }
+
+    function renderizarCardapio() {
+      const lista = document.getElementById("lista-cardapio")
+      lista.innerHTML = cardapio.map(item => `
+        <div class="item-cardapio" id="item-${item.id}" onclick="toggleItem(${item.id})">
+          <div class="item-info">
+            <div class="item-check">✓</div>
+            <span class="item-nome">${item.nome}</span>
+          </div>
+          <span class="item-preco">R$ ${item.preco.toFixed(2)}</span>
+        </div>
+      `).join("")
+    }
+
+    function toggleItem(id) {
+      if (selecionados.has(id)) {
+        selecionados.delete(id)
+        document.getElementById(`item-${id}`).classList.remove("selecionado")
+      } else {
+        selecionados.add(id)
+        document.getElementById(`item-${id}`).classList.add("selecionado")
+      }
+      atualizarResumo()
+    }
+
+    function atualizarResumo() {
+      const itens = cardapio.filter(i => selecionados.has(i.id))
+      const total = itens.reduce((acc, i) => acc + i.preco, 0)
+
+      document.getElementById("resumo-itens").textContent =
+        itens.length > 0
+          ? itens.map(i => i.nome).join(", ")
+          : "Nenhum item selecionado"
+
+      document.getElementById("total").textContent =
+        itens.length > 0 ? `Total: R$ ${total.toFixed(2)}` : ""
+    }
+
+
+    async function fazerPedido() {
+      const endereco = document.getElementById("endereco").value.trim()
+      const msg = document.getElementById("msg-feedback")
+
+    
+      if (selecionados.size === 0) {
+        mostrarMsg("Selecione pelo menos um item.", "erro")
+        return
+      }
+      if (!endereco) {
+        mostrarMsg("Informe o endereço de entrega.", "erro")
+        return
+      }
+
+      const btn = document.getElementById("btn-pedir")
+      btn.disabled = true
+      btn.textContent = "Enviando..."
+      msg.className = "msg"
+
+      try {
+        const res = await fetch(`${API}/pedido`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itens: Array.from(selecionados), 
+            endereco
+          })
+        })
+
+        if (!res.ok) throw new Error("Erro na API")
+
+        const pedido = await res.json()
+
+        mostrarMsg(`Pedido #${pedido.id} recebido! Acompanhe abaixo.`, "sucesso")
+        iniciarAcompanhamento(pedido.id)
+
+      } catch (e) {
+        mostrarMsg("Erro ao enviar pedido. Tente novamente.", "erro")
+        btn.disabled = false
+        btn.textContent = "Fazer pedido"
+      }
+    }
+
+
+    function iniciarAcompanhamento(pedidoId) {
+      document.getElementById("area-status").style.display = "block"
+      document.getElementById("status-id").textContent = `Pedido #${pedidoId}`
+
+      atualizarStatusNaTela("recebido")
+
+      pollingInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API}/pedido/${pedidoId}`)
+          const data = await res.json()
+          atualizarStatusNaTela(data.status)
+
+        
+          if (data.status === "pronto" || data.status === "entregue") {
+            clearInterval(pollingInterval)
+          }
+        } catch (e) {
+          console.error("Erro no polling:", e)
+        }
+      }, 3000)
+    }
+
+    function atualizarStatusNaTela(status) {
+      const labels = {
+        recebido:   { texto: "📋 Recebido",   classe: "badge-recebido"   },
+        preparando: { texto: "👨‍🍳 Preparando", classe: "badge-preparando" },
+        pronto:     { texto: "✅ Pronto!",     classe: "badge-pronto"     },
+        entregue:   { texto: "🛵 Entregue",   classe: "badge-entregue"   },
+      }
+
+      const passos = {
+        recebido:   1,
+        preparando: 2,
+        pronto:     3,
+        entregue:   4,
+      }
+
+      const badge = document.getElementById("status-badge")
+      const info = labels[status] || { texto: status, classe: "" }
+      badge.textContent = info.texto
+      badge.className = `status-badge ${info.classe}`
+
+      // Atualiza barra de progresso
+      const qtd = passos[status] || 1
+      for (let i = 1; i <= 4; i++) {
+        const passo = document.getElementById(`passo-${i}`)
+        passo.className = `passo${i <= qtd ? " ativo" : ""}`
+      }
+    }
+
+    function mostrarMsg(texto, tipo) {
+      const el = document.getElementById("msg-feedback")
+      el.textContent = texto
+      el.className = `msg ${tipo}`
+    }
+
+
+    carregarCardapio()
+
+  </script>
+</body>
+</html>

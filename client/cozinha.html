@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery — Painel da Cozinha</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <span class="emoji">👨‍🍳</span>
+    <h1>
+      Painel da Cozinha
+      <span class="contador" id="contador">0</span>
+    </h1>
+  </header>
+
+  <main style="display: block; max-width: 700px;">
+
+    <div class="card">
+
+      <div class="filtros">
+        <button class="filtro-btn ativo" onclick="filtrar('todos', this)">Todos</button>
+        <button class="filtro-btn" onclick="filtrar('recebido', this)">📋 Recebidos</button>
+        <button class="filtro-btn" onclick="filtrar('preparando', this)">👨‍🍳 Preparando</button>
+        <button class="filtro-btn" onclick="filtrar('pronto', this)">✅ Prontos</button>
+        <button class="filtro-btn" onclick="filtrar('entregue', this)">🛵 Entregues</button>
+      </div>
+
+      <div class="auto-refresh" id="ultima-atualizacao">
+        Atualizando a cada 4s...
+      </div>
+
+      <div id="lista-pedidos">
+        <p class="vazio">Carregando pedidos...</p>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000"
+
+    let todosPedidos = []         
+    let filtroAtual = "todos"     
+
+    const NOMES_ITENS = {
+      1: "Pizza Margherita",
+      2: "Pizza Calabresa",
+      3: "Hamburguer Clássico",
+      4: "Batata Frita",
+      5: "Refrigerante",
+    }
+
+
+    async function carregarPedidos() {
+      try {
+        const res = await fetch(`${API}/pedidos`)
+        todosPedidos = await res.json()
+
+        renderizarPedidos()
+        atualizarContador()
+        atualizarTimestamp()
+
+      } catch (e) {
+        document.getElementById("lista-pedidos").innerHTML =
+          '<p class="vazio">Erro ao carregar. A API está rodando?</p>'
+      }
+    }
+
+
+    function renderizarPedidos() {
+      const lista = document.getElementById("lista-pedidos")
+
+      const pedidos = filtroAtual === "todos"
+        ? todosPedidos
+        : todosPedidos.filter(p => p.status === filtroAtual)
+
+      if (pedidos.length === 0) {
+        lista.innerHTML = '<p class="vazio">Nenhum pedido encontrado.</p>'
+        return
+      }
+
+      lista.innerHTML = pedidos.map(pedido => {
+        const { texto, classe } = badgeInfo(pedido.status)
+        const nomes = traduzirItens(pedido.itens)
+        const tempo = formatarTempo(pedido.criado_em)
+
+        return `
+          <div class="pedido-card">
+            <div class="pedido-info">
+              <div class="pedido-id">Pedido #${pedido.id}</div>
+              <div class="pedido-itens">${nomes}</div>
+              <div class="pedido-endereco">📍 ${pedido.endereco}</div>
+              <div class="pedido-tempo">🕐 ${tempo}</div>
+            </div>
+            <div>
+              <div class="badge-cozinha ${classe}">${texto}</div>
+            </div>
+          </div>
+        `
+      }).join("")
+    }
+
+
+    function filtrar(status, btn) {
+      filtroAtual = status
+
+      document.querySelectorAll(".filtro-btn").forEach(b => b.classList.remove("ativo"))
+      btn.classList.add("ativo")
+
+      renderizarPedidos()
+    }
+
+
+    function atualizarContador() {
+      const pendentes = todosPedidos.filter(
+        p => p.status === "recebido" || p.status === "preparando"
+      ).length
+
+      const contador = document.getElementById("contador")
+      contador.textContent = pendentes
+      contador.style.display = pendentes > 0 ? "inline" : "none"
+    }
+
+    function badgeInfo(status) {
+      const mapa = {
+        recebido:   { texto: "📋 Recebido",   classe: "badge-recebido"   },
+        preparando: { texto: "👨‍🍳 Preparando", classe: "badge-preparando" },
+        pronto:     { texto: "✅ Pronto",      classe: "badge-pronto"     },
+        entregue:   { texto: "🛵 Entregue",   classe: "badge-entregue"   },
+      }
+      return mapa[status] || { texto: status, classe: "" }
+    }
+
+    function traduzirItens(itensStr) {
+      // itensStr vem como "[1, 3, 4]" ou "1,3,4" do banco
+      // Extrai os números e troca pelos nomes
+      const ids = itensStr.match(/\d+/g) || []
+      const nomes = ids.map(id => NOMES_ITENS[id] || `Item ${id}`)
+      return nomes.join(", ")
+    }
+
+    function formatarTempo(dataStr) {
+      if (!dataStr) return "—"
+      const data = new Date(dataStr)
+      const agora = new Date()
+      const diffMin = Math.floor((agora - data) / 60000)
+
+      if (diffMin < 1)  return "agora mesmo"
+      if (diffMin < 60) return `há ${diffMin} min`
+
+      return data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    }
+
+    function atualizarTimestamp() {
+      const agora = new Date().toLocaleTimeString("pt-BR")
+      document.getElementById("ultima-atualizacao").textContent =
+        `Última atualização: ${agora} — atualizando a cada 4s`
+    }
+
+    carregarPedidos()
+    setInterval(carregarPedidos, 4000)
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+services:
+
+  # ─────────────────────────────────────────
+  # REDIS
+  #
+  # Banco de dados em memória usado para:
+  #   - Cache do cardápio
+  #   - Status dos pedidos em tempo real
+  # ─────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine       # alpine = imagem minimalista, bem menor
+    container_name: delivery_redis
+    ports:
+      - "6379:6379"             # host:container — acessa pelo localhost:6379
+    volumes:
+      - redis_data:/data        # persiste os dados mesmo após parar o container
+    command: redis-server --appendonly yes
+    #                    └── appendonly yes → salva cada operação em disco
+    #                        sem isso os dados somem ao parar o container
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s             # verifica a cada 10 segundos
+      timeout: 5s               # aguarda até 5s pela resposta
+      retries: 3                # tenta 3 vezes antes de marcar como unhealthy
+
+
+  # ─────────────────────────────────────────
+  # RABBITMQ
+  #
+  # Message broker usado para:
+  #   - Fila de pedidos entre FastAPI e worker
+  #
+  # A tag -management inclui o painel web
+  # de administração — muito útil para ver
+  # as filas durante o desenvolvimento
+  # ─────────────────────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: delivery_rabbitmq
+    ports:
+      - "5672:5672"             # porta AMQP — usada pelo pika (Python)
+      - "15672:15672"           # porta do painel web de administração
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq   # persiste filas e mensagens
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5                # RabbitMQ demora mais para iniciar
+
+
+# ─────────────────────────────────────────
+# VOLUMES
+#
+# Volumes são pastas gerenciadas pelo Docker
+# que ficam fora do container.
+# Os dados persistem mesmo após "docker-compose down".
+# Para apagar os dados: "docker-compose down -v"
+# ─────────────────────────────────────────
+
+volumes:
+  redis_data:
+  rabbitmq_data:
