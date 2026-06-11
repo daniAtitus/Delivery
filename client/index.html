@@ -175,7 +175,7 @@
           atualizarStatusNaTela(data.status)
 
         
-          if (data.status === "pronto" || data.status === "entregue") {
+          if (data.status === "entregue") {
             clearInterval(pollingInterval)
           }
         } catch (e) {

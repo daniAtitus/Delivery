@@ -70,7 +70,7 @@
     }
 
 
-    function renderizarPedidos() {
+function renderizarPedidos() {
       const lista = document.getElementById("lista-pedidos")
 
       const pedidos = filtroAtual === "todos"
@@ -95,12 +95,60 @@
               <div class="pedido-endereco">📍 ${pedido.endereco}</div>
               <div class="pedido-tempo">🕐 ${tempo}</div>
             </div>
-            <div>
+            <div class="acoes-pedido">
               <div class="badge-cozinha ${classe}">${texto}</div>
+              
+              <select class="select-status" onchange="alterarStatusPedido(${pedido.id}, this.value)">
+                <option value="recebido" ${pedido.status === 'recebido' ? 'selected' : ''}>Mudar para Recebido</option>
+                <option value="preparando" ${pedido.status === 'preparando' ? 'selected' : ''}>Mudar para Preparando</option>
+                <option value="pronto" ${pedido.status === 'pronto' ? 'selected' : ''}>Mudar para Pronto</option>
+                <option value="entregue" ${pedido.status === 'entregue' ? 'selected' : ''}>Mudar para Entregue</option>
+              </select>
+
+              ${pedido.status === 'entregue' ? 
+                `<button class="btn btn-danger btn-sm" onclick="removerPedido(${pedido.id})">Remover Pedido</button>` 
+                : ''}
             </div>
           </div>
         `
       }).join("")
+    }
+
+    // --- NOVAS FUNÇÕES DE CONTROLE MANUAL ---
+
+    async function alterarStatusPedido(id, novoStatus) {
+      try {
+        const res = await fetch(`${API}/pedido/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: novoStatus })
+        });
+        
+        if (res.ok) {
+          carregarPedidos(); // Atualiza a tela imediatamente após o sucesso
+        } else {
+          alert("Erro ao atualizar o status do pedido.");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Erro de conexão com a API.");
+      }
+    }
+
+    async function removerPedido(id) {
+      if (!confirm(`Tem certeza que deseja remover permanentemente o pedido #${id}?`)) return;
+      
+      try {
+        const res = await fetch(`${API}/pedido/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          carregarPedidos();
+        } else {
+          alert("Erro: Apenas pedidos entregues podem ser removidos.");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Erro de conexão com a API.");
+      }
     }
 
 

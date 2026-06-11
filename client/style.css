@@ -328,3 +328,36 @@ main {
   text-align: right;
   margin-bottom: 0.5rem;
 }
+
+/* --- AÇÕES DA COZINHA --- */
+.acoes-pedido {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.select-status {
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 0.5px solid #d3d1c7;
+  font-size: 0.75rem;
+  font-family: inherit;
+  background: #fafafa;
+  color: #5f5e5a;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s;
+}
+
+.select-status:focus, .select-status:hover {
+  border-color: #2c2c2a;
+  background: #fff;
+  color: #2c2c2a;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}

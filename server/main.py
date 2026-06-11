@@ -144,3 +144,25 @@ def atualizar_status(pedido_id: int, body: StatusUpdate, db: Session = Depends(g
 
     print(f"🔄 Pedido #{pedido_id} → {body.status}")
     return {"id": pedido_id, "status": body.status}
+
+@app.delete("/pedido/{pedido_id}")
+def remover_pedido(pedido_id: int, db: Session = Depends(get_db)):
+    # 1. Verifica se o pedido existe
+    pedido = db.query(PedidoModel).filter(PedidoModel.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    # 2. Regra de negócio: apenas pedidos "entregues" podem ser apagados
+    if pedido.status != "entregue":
+        raise HTTPException(status_code=400, detail="Apenas pedidos entregues podem ser removidos")
+
+    # 3. Remove do SQLite
+    db.delete(pedido)
+    db.commit()
+
+    # 4. Remove a chave do status no Redis
+    from redis_client import r
+    r.delete(f"pedido:{pedido_id}:status")
+
+    print(f"🗑️ Pedido #{pedido_id} removido do sistema")
+    return {"mensagem": f"Pedido #{pedido_id} removido com sucesso"}
